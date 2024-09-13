@@ -1,5 +1,7 @@
 package com.Doctorappointment.dms.service;
 
+import com.Doctorappointment.dms.customException.AppointmentNotFoundException;
+import com.Doctorappointment.dms.customException.AppointmentTakenException;
 import com.Doctorappointment.dms.dto.AppointmentDto;
 import com.Doctorappointment.dms.entity.Appointment;
 import com.Doctorappointment.dms.entity.Doctor;
@@ -23,14 +25,14 @@ public class AppointmentService {
     @Autowired
     private DoctorRepository doctorRepository;
 
-    public void addAvailableTimes(Long doctorId, LocalDateTime start, LocalDateTime end) {
+    public List<AppointmentDto> addAvailableTimes(Long doctorId, LocalDateTime start, LocalDateTime end) {
         Doctor doctor = doctorRepository.findById(doctorId)
                 .orElseThrow(() -> new IllegalArgumentException("Doctor not found"));
 
         if (end.isBefore(start)) {
             throw  new IllegalArgumentException("End time must be after start time.");
         }
-
+        List<AppointmentDto> appointmentDtoList = null;
         LocalDateTime periodStart = start;
         while (periodStart.plusMinutes(30).isBefore(end) || periodStart.plusMinutes(30).isEqual(end)) {
             Appointment appointment = new Appointment();
@@ -39,12 +41,14 @@ public class AppointmentService {
             appointment.setEndTime(periodStart.plusMinutes(30));
             appointmentRepository.save(appointment);
             periodStart = periodStart.plusMinutes(30);
+            appointmentDtoList.add(AppointmentMapper.entityToDto(appointment));
         }
+        return appointmentDtoList;
     }
 
     public List<AppointmentDto> viewAppointments(Long doctorId) {
         Doctor doctor = doctorRepository.findById(doctorId)
-                .orElseThrow(() -> new IllegalArgumentException("Doctor not found"));
+                .orElseThrow(() -> new AppointmentNotFoundException("Doctor not found"));
         List<Appointment> appointmentList = appointmentRepository.findByDoctor(doctor);
         return appointmentList.stream().map(AppointmentMapper::entityToDto).collect(Collectors.toList());
     }
@@ -54,7 +58,7 @@ public class AppointmentService {
                 .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
 
         if(appointment.getPatientName() != null) {
-            throw new IllegalArgumentException("Cannot delete a taken appointment.");
+            throw new AppointmentTakenException("Cannot delete a taken appointment.");
         }
         appointmentRepository.delete(appointment);
     }
